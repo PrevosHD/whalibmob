@@ -265,6 +265,7 @@ npm install -g whalibmob
     - [Mídia no Modo Companion](#mídia-no-modo-companion)
     - [Identidade do Dispositivo](#identidade-do-dispositivo)
     - [Como o Código Protege o Vínculo](#como-o-código-protege-o-vínculo)
+  - [Autorizando um Companion a partir de uma Sessão Principal](#autorizando-um-companion-a-partir-de-uma-sessão-principal)
   - [Modo Companion — API Node.js](#modo-companion--api-nodejs)
     - [Exemplo Completo Funcional](#exemplo-completo-funcional)
     - [Métodos](#métodos)
@@ -1812,6 +1813,8 @@ wa> /quit
 | `/connect <phone> [sms\|pair]` | Conecta ao WhatsApp — escolhe o método pelos arquivos de sessão quando não informado |
 | `/pair <phone> [code]` | Vincula a uma conta existente por código de pareamento de 8 dígitos |
 | `/qrcode <phone>` | Vincula a uma conta existente escaneando um QR desenhado no terminal |
+| `/link-code <8chars>` | **Apenas principal (SMS)** — aceita o código de pareamento de um companion (ex.: Baileys / kebab) |
+| `/link-qr <qr-string>` | **Apenas principal (SMS)** — aceita o payload QR de um companion (CSV ou `wa.me/settings/linked_devices#…`) |
 | `/disconnect` | Desconecta a sessão atual |
 | `/reconnect` | Força uma reconexão |
 | `/session` | Mostra as informações da sessão |
@@ -2564,6 +2567,60 @@ O whalibmob anexa isso automaticamente sempre que há um `pkmsg` na stanza, tant
 O código de pareamento é uma senha, não um identificador. Ele nunca é enviado ao servidor às claras. Os dois lados o passam por PBKDF2-SHA256 (131.072 iterações) para derivar uma chave que envolve as chaves públicas efêmeras que eles trocam, e então combinam dois resultados Diffie-Hellman em `adv_secret` — a chave sob a qual toda prova posterior de pertencimento à conta é autenticada.
 
 O whalibmob verifica três coisas antes de aceitar um vínculo, e o recusa de imediato se qualquer uma falhar: o HMAC sobre a identidade de dispositivo assinada, a assinatura da conta sobre a própria chave de identidade, e o slot de dispositivo que lhe foi atribuído. Um código errado não pode produzir um vínculo funcional, e uma resposta adulterada também não.
+
+## Autorizando um Companion a partir de uma Sessão Principal
+
+As seções acima cobrem **tornar-se** um companion (QR / código de pareamento quando você não tem um principal por SMS). Esta seção é o outro sentido: você já tem uma sessão **principal** registrada por SMS, e quer que esse principal **autorize** outro cliente (WhatsApp Web, Baileys, kebab, outro companion whalibmob, …) como dispositivo vinculado.
+
+Exige um principal online (`Client` com `authMethod: 'sms'` / uma sessão que concluiu o registro por SMS). Companions não podem autorizar outros dispositivos.
+
+### CLI
+
+Conecte primeiro a sessão principal (`/connect` ou inicie a CLI nessa sessão), depois:
+
+```
+/link-code ABCD1234
+```
+
+Use o código de 8 caracteres que o companion imprimiu (o mesmo alfabeto que o WhatsApp usa para vincular por número). Ou, se o companion mostrar um QR:
+
+```
+/link-qr 2@base64ref,base64pubkey,base64idkey,,REF
+```
+
+Você também pode colar a URL completa `https://wa.me/settings/linked_devices#…` / `http://wa.me/…`; o fragmento depois de `#` é o payload do QR.
+
+Em caso de sucesso a CLI imprime o JID do novo companion (ex.: `4915…@s.whatsapp.net:25`). O companion deve concluir o próprio handshake e ficar online em seguida — mantenha o principal conectado até lá.
+
+### API Node.js
+
+```js
+// Caminho por código (companion chamou requestPairingCode / equivalente)
+const result = await client.linkCompanionWithCode('ABCD1234')
+console.log(result.deviceJid)   // ex.: '4915233518437:25@s.whatsapp.net'
+
+// Caminho por QR (companion emitiu uma string QR / fragmento wa.me)
+const result2 = await client.linkCompanionWithQr(qrStringOrWaMeUrl)
+console.log(result2.deviceJid)
+```
+
+Ambos resolvem com `{ deviceJid, deviceId }` quando o WhatsApp aceita o handshake ADV. Rejeitam se a sessão não for principal, se o código/QR for inválido, ou se o servidor devolver erro (incluindo rate limits — espere e tente de novo, ou alterne código ↔ QR).
+
+Segundo argumento opcional: `{ timeoutMs }` (padrão generoso o bastante para companions lentos).
+
+### Eventos
+
+| Evento | Quando |
+| --- | --- |
+| `companion_linking` | O principal iniciou uma tentativa de autorização (`{ method: 'code' \| 'qr' }`) |
+| `companion_linked` | O servidor aceitou o dispositivo (`{ deviceJid, deviceId, method }`) |
+| `companion_link_failed` | A autorização falhou (`{ error, method }`) |
+
+### Notas
+
+- O principal precisa permanecer online durante o handshake.
+- A Meta limita o pareamento (`429` / overlimit). Se códigos falharem repetidamente, tente QR (ou espere).
+- Isso **não** substitui `/pair` / `/qrcode`: esses fazem *este* processo virar o companion. `/link-code` / `/link-qr` fazem *este* processo ser o principal que aprova outra pessoa.
 
 ## Modo Companion — API Node.js
 
