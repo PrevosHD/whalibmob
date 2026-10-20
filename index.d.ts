@@ -98,6 +98,11 @@ export interface WhalibmobStore {
   device: DeviceConfig;
   /** Signed device identity bytes, `null` until the server sends them in `<success>`. */
   advIdentity: Buffer | null;
+  /**
+   * Companion device slots this primary has authorised (1, 2, …).
+   * Used when building `key-index-list` for the next `<pair-device>`.
+   */
+  linkedDeviceIndexes?: number[];
   [key: string]: any;
 }
 
@@ -854,6 +859,19 @@ export interface WhalibmobEvents {
   qr_timeout: () => void;
   pair_device: (p: { refs: string[] }) => void;
   paired: (p: { jid: Jid; lid: Jid; deviceIndex: number; platform: string }) => void;
+  /**
+   * Primary (mobile) mode: a companion started link-code pairing.
+   * Enter its code with `linkCompanionWithCode`.
+   */
+  companion_link_pending: (p: {
+    platformDisplay: string | null;
+    platformId: string | null;
+    shouldShowPushNotification: boolean;
+  }) => void;
+  /** Primary (mobile) mode: a companion was authorised via link-code or QR. */
+  companion_linked: (p: { jid: Jid; deviceIndex: number }) => void;
+  /** Primary: non-actionable or ignored link_code notice (debug/UX). */
+  companion_link_notice: (n: { empty?: boolean; stage?: string | null; ignored?: boolean }) => void;
   restart_required: (r: { reason?: string }) => void;
   web_ready_for_pairing: () => void;
 
@@ -906,6 +924,16 @@ export declare class WhalibmobClient extends EventEmitter {
   initWeb(phoneNumber: string, opts?: ConnectWebOptions): Promise<this>;
   /** Ask for an 8-character pairing code. Throws if the session is already linked. */
   requestPairingCode(phoneNumber?: string, customCode?: string): Promise<string>;
+  /**
+   * Primary (mobile) only: authorise a companion that showed an 8-character
+   * pairing code. Requires a prior `companion_link_pending` event.
+   */
+  linkCompanionWithCode(code: string, opts?: { waitMs?: number }): Promise<{ jid: Jid; deviceIndex: number }>;
+  /**
+   * Primary (mobile) only: authorise a companion by pasting its QR payload
+   * (bare CSV or `https://wa.me/settings/linked_devices#…`).
+   */
+  linkCompanionWithQr(qrOrUrl: string): Promise<{ jid: Jid; deviceIndex: number }>;
   disconnect(opts?: DisconnectOptions): void;
   /**
    * Unlink this device from the account, the way the Linked Devices screen on
@@ -1588,6 +1616,20 @@ export declare function derivePairingCodeKey(...args: any[]): any;
 export declare function buildWrappedEphemeralPub(...args: any[]): any;
 export declare function decipherLinkPublicKey(...args: any[]): any;
 export declare function buildCompanionFinishBundle(...args: any[]): any;
+export declare function buildPrimaryHello(...args: any[]): Promise<any>;
+export declare function finishPrimaryFromCompanionBundle(...args: any[]): any;
+export declare function buildPairDevicePayload(...args: any[]): any;
+export declare function parseCompanionQr(qrOrUrl: string): {
+  ref: Buffer;
+  companionNoisePub: Buffer;
+  companionIdentityPub: Buffer;
+  advSecret: Buffer;
+  platformId: number | null;
+};
+export declare function allocateCompanionDeviceIndex(linkedDeviceIndexes?: number[]): {
+  keyIndex: number;
+  validIndexes: number[];
+};
 export declare function configureSuccessfulPairing(...args: any[]): any;
 export declare function encodeCompanionRegisterPayload(...args: any[]): Buffer;
 export declare function encodeCompanionLoginPayload(...args: any[]): Buffer;
@@ -1855,6 +1897,8 @@ export declare const Hkdf: LibModule & {
 /** Linking to an account that already exists. */
 export declare const PairingCode: LibModule;
 export declare const CompanionPairing: LibModule;
+/** Primary-side companion linking (accept kebab / WA Web pairing). */
+export declare const PrimaryPairing: LibModule;
 export declare const QrPairing: LibModule;
 export declare const WebVersion: LibModule;
 export declare const WebProto: LibModule;

@@ -103,7 +103,8 @@ test('every method declared on WhalibmobClient exists on the class', () => {
 test('the client exposes the methods the README documents', () => {
   // A spot-check across every area, so a rename cannot quietly break the docs.
   const documented = [
-    'init', 'connect', 'connectWeb', 'requestPairingCode', 'disconnect',
+    'init', 'connect', 'connectWeb', 'requestPairingCode',
+    'linkCompanionWithCode', 'linkCompanionWithQr', 'disconnect',
     'sendText', 'sendImage', 'sendVideo', 'sendAudio', 'sendDocument',
     'sendSticker', 'sendReaction', 'sendPoll', 'sendLocation', 'sendContact',
     'sendReply', 'sendStatus', 'forwardMessage', 'editMessage', 'deleteMessage',

@@ -681,6 +681,8 @@ const HELP = `
     /connect    <phone> [sms|pair]           connect to WhatsApp (asks which if unset)
     /pair       <phone> [code]               link to an existing account by 8-digit code
     /qrcode     <phone>                       link to an existing account by scanning a QR
+    /link-code  <8chars>                     primary: accept companion pairing code (kebab / WA Web)
+    /link-qr    <qr-string>                  primary: accept companion QR payload
     /fixnumber                               re-file a session under the number WhatsApp uses
     /disconnect                              disconnect
     /reconnect                              force reconnection
@@ -901,8 +903,40 @@ function attachEvents(client) {
     notConnected();
   });
 
-  client.on('error', (e) => {
+  client.on('companion_link_pending', (p) => {
     _rl && _rl.pause();
+    out('');
+    hr();
+    out('  companion wants to link' +
+      (p.platformDisplay ? '  ·  ' + p.platformDisplay : ''));
+    out('  enter its pairing code:  /link-code XXXXXXXX');
+    hr();
+    _rl && _rl.resume();
+    _rl && _rl.prompt();
+  });
+
+  client.on('companion_link_notice', (n) => {
+    if (n && n.empty) {
+      // Harmless: WA sometimes pings without crypto payload.
+      return;
+    }
+    if (n && n.ignored) {
+      _rl && _rl.pause();
+      out('  (link_code notice ignored — stage=' + (n.stage || '?') + ')');
+      _rl && _rl.resume();
+      _rl && _rl.prompt();
+    }
+  });
+
+  client.on('companion_linked', (r) => {
+    _rl && _rl.pause();
+    out('');
+    out('  companion linked  ' + r.jid + '  (device ' + r.deviceIndex + ')');
+    _rl && _rl.resume();
+    _rl && _rl.prompt();
+  });
+
+  client.on('error', (e) => {    _rl && _rl.pause();
     fail(e.message || String(e));
     _rl && (_rl.resume(), _rl.prompt(true));
   });
@@ -1419,6 +1453,59 @@ async function handleLine(line) {
         if (_client && _client.connected) { fail('already connected — /disconnect first'); break; }
         out('connecting...');
         await doConnectWebQr(ph);
+        break;
+      }
+
+      case '/link-code':
+      case '/linkcode': {
+        requireConn();
+        if (_client._mode !== 'mobile') {
+          fail('/link-code is for a mobile (SMS) primary session — you are in companion mode');
+          break;
+        }
+        const code = (p[1] || '').replace(/[^0-9A-Za-z]/g, '');
+        if (!code) {
+          fail('usage: /link-code <8-char-code>');
+          out('  start pairing on kebab / WhatsApp Web first, wait for companion_link_pending,');
+          out('  then paste the code it shows');
+          break;
+        }
+        if (!_client._pendingCompanionHello) {
+          out('  no companion_hello yet — waiting up to 45s.');
+          out('  keep this session online and (re)start kebab pairing now.');
+          out('  if kebab shows 429 rate-overlimit, wait and retry kebab first.');
+        } else {
+          out('linking companion with code...');
+        }
+        try {
+          const r = await _client.linkCompanionWithCode(code, { waitMs: 45000 });
+          out('linked  ' + r.jid + '  (device ' + r.deviceIndex + ')');
+        } catch (e) {
+          fail('link-code error: ' + e.message);
+        }
+        break;
+      }
+
+      case '/link-qr':
+      case '/linkqr': {
+        requireConn();
+        if (_client._mode !== 'mobile') {
+          fail('/link-qr is for a mobile (SMS) primary session — you are in companion mode');
+          break;
+        }
+        const qr = p.slice(1).join(' ').trim();
+        if (!qr) {
+          fail('usage: /link-qr <qr-string-or-url>');
+          out('  paste the companion QR payload (CSV or wa.me/settings/linked_devices#…)');
+          break;
+        }
+        out('linking companion from QR...');
+        try {
+          const r = await _client.linkCompanionWithQr(qr);
+          out('linked  ' + r.jid + '  (device ' + r.deviceIndex + ')');
+        } catch (e) {
+          fail('link-qr error: ' + e.message);
+        }
         break;
       }
 

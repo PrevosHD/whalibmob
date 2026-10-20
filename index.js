@@ -35,6 +35,13 @@ const {
   decipherLinkPublicKey,
   buildCompanionFinishBundle
 } = require('./lib/PairingCode');
+const {
+  buildPrimaryHello,
+  finishPrimaryFromCompanionBundle,
+  buildPairDevicePayload,
+  parseCompanionQr,
+  allocateCompanionDeviceIndex
+} = require('./lib/PrimaryPairing');
 const { configureSuccessfulPairing } = require('./lib/CompanionPairing');
 const { fetchWaWebVersion } = require('./lib/WebVersion');
 const {
@@ -138,6 +145,7 @@ const Plist            = require('./lib/plist');
 
 const PairingCode      = require('./lib/PairingCode');
 const CompanionPairing = require('./lib/CompanionPairing');
+const PrimaryPairing   = require('./lib/PrimaryPairing');
 const QrPairing        = require('./lib/QrPairing');
 const WebVersion       = require('./lib/WebVersion');
 const WebProto         = require('./lib/webproto');
@@ -277,6 +285,12 @@ module.exports = {
   buildWrappedEphemeralPub,
   decipherLinkPublicKey,
   buildCompanionFinishBundle,
+  // Primary-side companion linking (accept kebab / WA Web pairing)
+  buildPrimaryHello,
+  finishPrimaryFromCompanionBundle,
+  buildPairDevicePayload,
+  parseCompanionQr,
+  allocateCompanionDeviceIndex,
   configureSuccessfulPairing,
   encodeCompanionRegisterPayload,
   encodeCompanionLoginPayload,
@@ -388,6 +402,7 @@ module.exports = {
 
   PairingCode,
   CompanionPairing,
+  PrimaryPairing,
   QrPairing,
   WebVersion,
   WebProto,
