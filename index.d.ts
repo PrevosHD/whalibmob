@@ -1214,8 +1214,10 @@ export declare class WhalibmobClient extends EventEmitter {
     ok: boolean | null; status: string | null; markers: string[];
     data: any; sessionId: string;
   }>;
-  /** Read the username the server has on file for a jid (own jid by default), via usync. */
-  fetchUsername(jid: string): Promise<string | null>;
+  /** Read the username on file for a phone number via usync (often withheld for privacy). */
+  fetchUsername(phoneOrJid: string): Promise<string | null>;
+  /** Resolve a username to the account that holds it (username -> jid), via usync. */
+  lookupUsername(username: string): Promise<{ jid: string; onWhatsApp: boolean } | null>;
 
   // ─── Stores on disk ──────────────────────────────────────────────────────
   getHistoryStore(): any;

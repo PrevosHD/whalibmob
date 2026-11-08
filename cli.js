@@ -646,6 +646,7 @@ const HELP = `
     /username <name>                         set (reserve) your username
     /username check <name>                   check if a username is available
     /username get [jid]                      read the username on file (own by default)
+    /username whois <name>                    resolve a username to its account jid
 
   Presence
     /online                                  set yourself as online
@@ -1717,6 +1718,18 @@ async function handleLine(line) {
             .then(u => out('username on file for ' + jid + ': ' +
               (u ? '"' + u + '"' : '(none)') + '  (' + (Date.now() - _tg) + 'ms)'))
             .catch(e => fail('username get error: ' + e.message));
+          break;
+        }
+        if (p[1] === 'whois') {
+          const _tw = Date.now();
+          const uname = p[2];
+          if (!uname) { fail('usage: /username whois <name>'); break; }
+          out('looking up...');
+          _client.lookupUsername(uname)
+            .then(r => out('@' + uname + ' -> ' +
+              (r ? r.jid + (r.onWhatsApp ? '' : ' (not on WhatsApp)') : '(nobody)') +
+              '  (' + (Date.now() - _tw) + 'ms)'))
+            .catch(e => fail('username whois error: ' + e.message));
           break;
         }
         const checkOnly = p[1] === 'check';
