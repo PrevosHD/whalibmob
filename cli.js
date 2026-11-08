@@ -1704,6 +1704,26 @@ async function handleLine(line) {
         break;
       }
 
+      case '/mexraw': {
+        // diagnostic: /mexraw <query_id> <json-body>
+        requireConn();
+        const qid = p[1];
+        const jsonStr = line.slice(line.indexOf(p[1]) + p[1].length).trim();
+        if (!qid || !jsonStr) { fail('usage: /mexraw <query_id> <json-body>'); break; }
+        let bodyObj;
+        try { bodyObj = JSON.parse(jsonStr); } catch (e) { fail('bad json: ' + e.message); break; }
+        const _tm = Date.now();
+        out('sending mex...');
+        _client._mexQuery(qid, null, null, { wantArgoRaw: true, body: bodyObj })
+          .then(r => {
+            const raw = r && r.argoRaw;
+            out('mex reply: ' + (raw ? 'argo ' + raw.length + 'B hex=' + raw.toString('hex') : JSON.stringify(r)) +
+              '  (' + (Date.now() - _tm) + 'ms)');
+          })
+          .catch(e => fail('mexraw error: ' + e.message));
+        break;
+      }
+
       case '/username': {
         requireConn();
         // /username <name>         set (reserve) the username
