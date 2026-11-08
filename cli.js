@@ -1713,21 +1713,25 @@ async function handleLine(line) {
         if (checkOnly) {
           out('checking...');
           _client.checkUsername(name)
-            .then(r  => out('available: ' + (r.data === true ? 'yes' : 'no') +
-              '  (raw ' + JSON.stringify(r.data) + ', ' + (Date.now() - _t0) + 'ms)'))
+            .then(r  => {
+              const ms = Date.now() - _t0;
+              const avail = r.available === true ? 'yes'
+                          : r.available === false ? 'no' : 'unknown';
+              out('available: ' + avail + '  (' + (r.status || '?') + ', ' + ms + 'ms)');
+            })
             .catch(e => fail('username check error: ' + e.message));
         } else {
           out('setting...');
           _client.setUsername(name)
             .then(r  => {
-              // The server confirms with a GraphQL object; a bare false/null is a
-              // rejection the argo decoder could not turn into a readable error.
-              if (r.data && typeof r.data === 'object') {
-                out('username set to "' + name + '"  ' + JSON.stringify(r.data) +
-                  '  (' + (Date.now() - _t0) + 'ms)');
+              const ms = Date.now() - _t0;
+              if (r.ok === true) {
+                out('username set to "' + name + '"  (' + (r.status || 'SUCCESS') + ', ' + ms + 'ms)');
+              } else if (r.ok === false) {
+                fail('username not set — ' + (r.status || 'rejected') + '  (' + ms + 'ms)');
               } else {
-                fail('username not set — server rejected it (argo reply: ' +
-                  JSON.stringify(r.data) + ', ' + (Date.now() - _t0) + 'ms)');
+                out('username "' + name + '": server reply not understood (' +
+                  JSON.stringify(r.markers) + ', ' + ms + 'ms)');
               }
             })
             .catch(e => fail('username set error: ' + e.message));

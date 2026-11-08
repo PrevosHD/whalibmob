@@ -1198,10 +1198,22 @@ export declare class WhalibmobClient extends EventEmitter {
   changeNewsletterDescription(newsletterJid: Jid, description: string): Promise<any>;
   sendNewsletterText(newsletterJid: Jid, text: string): Promise<any>;
 
-  /** Check whether a username is available (w:mex UsernameCheckQueryV2). */
-  checkUsername(username: string, sessionId?: string): Promise<{ data: any; sessionId: string }>;
-  /** Set (reserve) this account's username (w:mex UsernameSetMutation). */
-  setUsername(username: string, opts?: { sessionId?: string; pin?: string }): Promise<{ data: any; sessionId: string }>;
+  /**
+   * Check whether a username is available (w:mex UsernameCheckQueryV2).
+   * `available` is true/false, or null when the reply could not be read.
+   */
+  checkUsername(username: string, sessionId?: string): Promise<{
+    available: boolean | null; status: string | null; markers: string[];
+    data: any; sessionId: string;
+  }>;
+  /**
+   * Set (reserve) this account's username (w:mex UsernameSetMutation).
+   * `ok` is true on SUCCESS, false on rejection, null when unreadable.
+   */
+  setUsername(username: string, opts?: { sessionId?: string; pin?: string }): Promise<{
+    ok: boolean | null; status: string | null; markers: string[];
+    data: any; sessionId: string;
+  }>;
 
   // ─── Stores on disk ──────────────────────────────────────────────────────
   getHistoryStore(): any;

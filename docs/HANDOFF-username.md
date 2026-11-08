@@ -45,12 +45,27 @@ offiziellen iOS-Client (App 26.41.74) per Frida auf dem iPhone X:
 - `cli.js`: `/username <name>` (setzen), `/username check <name>` (nur prüfen), in Help unter „Account".
 - `index.d.ts`: Deklarationen ergänzt, `npm run test:types` grün.
 
-**Noch offen — Live-Test gegen Server (auf dem Server fortsetzen):**
-1. Mit einer verbundenen whalibmob-Session zuerst `/username check <name>` (ungefährlich) —
-   bestätigt Wire-Format + Verfügbarkeits-Antwort.
-2. Dann `setUsername` an einer **Wegwerf-Testnummer** (NICHT eine der 5 Nummern), danach Nando_20.
-3. `data`-Antwortstruktur prüfen (Feldnamen der GraphQL-Response, z.B. Erfolg/Fehlercode) und
-   bei Bedarf einen `dataPath`/Erfolgs-Parse in `setUsername`/`checkUsername` ergänzen.
+**Live getestet (2026-11-08, Testnummer +63…420) — funktioniert:**
+- `/username check <name>` und `/username <name>` erzeugen Stanzas identisch zum iOS-Client,
+  Server verarbeitet beide.
+- Antworten kommen als **argo** (`<result format="argo">`). `decodeArgo` macht daraus ein
+  bloßes `false`; die eigentlichen Enum-Labels stehen aber inline als längenpräfigierte
+  UTF-8 im Puffer (`(len<<1)` + Bytes). `argoInlineStrings()` + `interpretUsernameReply()`
+  in `lib/Client.js` ziehen sie raus:
+  - Set erfolgreich → `04 0e SUCCESS …` → `{ ok:true, status:'SUCCESS' }` (Name wurde gesetzt).
+  - Check vergeben → `… Query … INVALID … ALREADY_TAKEN …` → `{ available:false, status:'ALREADY_TAKEN' }`.
+  - Set abgelehnt → `… "Bad Request" … CRITICAL …` → `{ ok:false, status:'Bad Request' }`
+    (z.B. unerlaubtes `-`; Zeichen werden jetzt zusätzlich client-seitig per Regex abgefangen).
+- `checkUsername` gibt `{ available, status, markers, data, sessionId }`,
+  `setUsername` gibt `{ ok, status, markers, data, sessionId }`.
+
+**Noch offen:**
+1. Positives Check-Sample fehlt: alle getesteten Namen waren vergeben. Wenn ein freier Name
+   geprüft wird, das Enum-Label notieren (vermutlich `AVAILABLE`/`SUCCESS`) und bei Bedarf in
+   `interpretUsernameReply()` ergänzen — aktuell wird `AVAILABLE`/`SUCCESS` schon als frei gewertet.
+2. An Nando_20 testen (Testnummer steht bereits auf „Bocchi63_429").
+3. Optional sauber: `decodeArgo` (`lib/argo`) so erweitern, dass es diese self-describing
+   Replies vollständig als Objekt dekodiert, statt der inline-String-Heuristik.
 
 Frida-Details, Device-Zugang und Capture-Skripte: siehe Memory `username-mex-capture.md`
 (Skripte im Scratchpad: `capture9.py` = leichter w:mex-Hook, der die Mutation fing).
