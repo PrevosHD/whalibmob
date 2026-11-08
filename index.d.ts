@@ -1198,6 +1198,11 @@ export declare class WhalibmobClient extends EventEmitter {
   changeNewsletterDescription(newsletterJid: Jid, description: string): Promise<any>;
   sendNewsletterText(newsletterJid: Jid, text: string): Promise<any>;
 
+  /** Check whether a username is available (w:mex UsernameCheckQueryV2). */
+  checkUsername(username: string, sessionId?: string): Promise<{ data: any; sessionId: string }>;
+  /** Set (reserve) this account's username (w:mex UsernameSetMutation). */
+  setUsername(username: string, opts?: { sessionId?: string; pin?: string }): Promise<{ data: any; sessionId: string }>;
+
   // ─── Stores on disk ──────────────────────────────────────────────────────
   getHistoryStore(): any;
   getMessagesStore(): any;

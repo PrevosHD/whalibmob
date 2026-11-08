@@ -21,24 +21,39 @@
 - DECRYPT_ERRORs in der whalibmob-Konsole (Primary) sind für kebab egal (Primary war offline,
   PreKeys out of sync).
 
-## Offen: Username setzen in whalibmob (Ziel: `/username <name>` in der CLI)
-- Usernames (WhatsApp, seit 29.06.2026): 3–35 Zeichen, a-z 0-9 `.` `_`, optional „Username-Key“ (PIN).
-- whalibmob kann Usernames nur **lesen** (`lib/WAUSync/Protocols/USyncUsernameProtocol.js`,
-  `contact_update`, Gruppen-Attribute `participant_username` …). Kein Set-Request vorhanden,
-  `lib/tokens.js` enthält kein Username-Token. Baileys kann es auch nicht. Kein öffentliches
-  Projekt (whatsmeow etc.) hat den Set-Request dokumentiert.
-- `/name` setzt nur den Anzeigenamen (pushname), nicht den Username.
+## Username setzen in whalibmob (`/username <name>`) — Request gefangen + implementiert
 
-### Plan: Request vom offiziellen Client mitschneiden
-1. Gerät mit offizieller WhatsApp + **Wegwerf-Testnummer** (NICHT eine der 5 Nummern).
-2. Frida-Hook auf den Stanza-Encoder (BinaryNode/XMPP-Node vor Noise-Verschlüsselung),
-   alle ausgehenden `<iq>` loggen.
-3. In der App Username setzen (und ggf. Username-Key) → mitgeschnittene IQs sichern.
-   Zusätzlich: Username-Verfügbarkeit prüfen (beim Tippen) mitschneiden.
-4. Daraus `Client.setUsername()` / `checkUsername()` + CLI-Befehl `/username` bauen,
-   erst an der Testnummer testen, dann Nando_20.
-- Vorhandene Frida-Infrastruktur in whalibmob: `frida/android`, `frida/ios` (bisher nur
-  Registrierung/Attestation) – als Ausgangspunkt für Gerät-Anbindung nutzen.
+Usernames (WhatsApp, seit 29.06.2026): 3–35 Zeichen, a-z 0-9 `.` `_`, optional „Username-Key" (PIN).
+`/name` setzt nur den Anzeigenamen (pushname), nicht den Username.
+
+**Kernbefund:** Usernames laufen über **w:mex (Meta GraphQL)**, NICHT über klassisches
+Token-XML (`lib/tokens.js` braucht daher kein neues Token). Beide Calls sind
+`iq type=get xmlns=w:mex` und werden nur per `query_id` unterschieden. Mitgeschnitten vom
+offiziellen iOS-Client (App 26.41.74) per Frida auf dem iPhone X:
+
+- **Check** `UsernameCheckQueryV2`, `query_id=26960756810228820`,
+  `variables={"username":"<name>","session_id":"<uuid>","source":"USER_INPUT","include_suggestions":false,"_skip_concrete_typename_fields":true}`
+- **Set** `UsernameSetMutation`, `query_id=27363455153316957`,
+  `variables={"session_id":"<uuid>","reserved":true,"input":"<name>","source":"USER_INPUT","pin":null,"_skip_concrete_typename_fields":true}`
+  (Username steht in `input`, nicht `username`. PIN separat: `UsernamePINSetMutation`.)
+  Der offizielle Client nutzt eine `session_id` (UUID) für Check und Set derselben Bearbeitung.
+
+**Implementiert (2026-11-08):**
+- `lib/Client.js`: `checkUsername(name[, sessionId])` und `setUsername(name[, {sessionId, pin}])`,
+  beide über das vorhandene `_mexQuery(queryId, variables)`. `checkUsername` ist read-only,
+  `setUsername` ändert echt. Beide geben `{ data, sessionId }` zurück.
+- `cli.js`: `/username <name>` (setzen), `/username check <name>` (nur prüfen), in Help unter „Account".
+- `index.d.ts`: Deklarationen ergänzt, `npm run test:types` grün.
+
+**Noch offen — Live-Test gegen Server (auf dem Server fortsetzen):**
+1. Mit einer verbundenen whalibmob-Session zuerst `/username check <name>` (ungefährlich) —
+   bestätigt Wire-Format + Verfügbarkeits-Antwort.
+2. Dann `setUsername` an einer **Wegwerf-Testnummer** (NICHT eine der 5 Nummern), danach Nando_20.
+3. `data`-Antwortstruktur prüfen (Feldnamen der GraphQL-Response, z.B. Erfolg/Fehlercode) und
+   bei Bedarf einen `dataPath`/Erfolgs-Parse in `setUsername`/`checkUsername` ergänzen.
+
+Frida-Details, Device-Zugang und Capture-Skripte: siehe Memory `username-mex-capture.md`
+(Skripte im Scratchpad: `capture9.py` = leichter w:mex-Hook, der die Mutation fing).
 
 ### Geräte
 - Android (Root + frida-server) → geht.

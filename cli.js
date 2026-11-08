@@ -642,6 +642,10 @@ const HELP = `
     /location <jid> <lat> <lon> [name] [| address]              send a location pin
     /vcard    <jid> <name> <vcard-string>                        send a contact card (vCard)
 
+  Account
+    /username <name>                         set (reserve) your username
+    /username check <name>                   check if a username is available
+
   Presence
     /online                                  set yourself as online
     /offline                                 set yourself as offline
@@ -1695,6 +1699,28 @@ async function handleLine(line) {
         _client.sendText(jid, rest.join(' '))
           .then(r  => out('sent  ' + (r && r.id ? r.id : r) + '  (' + (Date.now() - _t0) + 'ms)'))
           .catch(e => fail('send error: ' + e.message));
+        break;
+      }
+
+      case '/username': {
+        requireConn();
+        // /username <name>         set (reserve) the username
+        // /username check <name>   only check availability
+        const checkOnly = p[1] === 'check';
+        const name = checkOnly ? p[2] : p[1];
+        if (!name) { fail('usage: /username <name>  |  /username check <name>'); break; }
+        const _t0 = Date.now();
+        if (checkOnly) {
+          out('checking...');
+          _client.checkUsername(name)
+            .then(r  => out('check ' + JSON.stringify(r.data) + '  (' + (Date.now() - _t0) + 'ms)'))
+            .catch(e => fail('username check error: ' + e.message));
+        } else {
+          out('setting...');
+          _client.setUsername(name)
+            .then(r  => out('username set to "' + name + '"  ' + JSON.stringify(r.data) + '  (' + (Date.now() - _t0) + 'ms)'))
+            .catch(e => fail('username set error: ' + e.message));
+        }
         break;
       }
 
