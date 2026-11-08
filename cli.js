@@ -645,6 +645,7 @@ const HELP = `
   Account
     /username <name>                         set (reserve) your username
     /username check <name>                   check if a username is available
+    /username get [jid]                      read the username on file (own by default)
 
   Presence
     /online                                  set yourself as online
@@ -1706,9 +1707,21 @@ async function handleLine(line) {
         requireConn();
         // /username <name>         set (reserve) the username
         // /username check <name>   only check availability
+        // /username get [jid]      read the username on file (own jid by default)
+        if (p[1] === 'get') {
+          const _tg = Date.now();
+          const jid = p[2] || (_client.store.me && _client.store.me.id);
+          if (!jid) { fail('usage: /username get [jid]'); break; }
+          out('reading...');
+          _client.fetchUsername(jid)
+            .then(u => out('username on file for ' + jid + ': ' +
+              (u ? '"' + u + '"' : '(none)') + '  (' + (Date.now() - _tg) + 'ms)'))
+            .catch(e => fail('username get error: ' + e.message));
+          break;
+        }
         const checkOnly = p[1] === 'check';
         const name = checkOnly ? p[2] : p[1];
-        if (!name) { fail('usage: /username <name>  |  /username check <name>'); break; }
+        if (!name) { fail('usage: /username <name>  |  /username check <name>  |  /username get [jid]'); break; }
         const _t0 = Date.now();
         if (checkOnly) {
           out('checking...');

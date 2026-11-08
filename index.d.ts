@@ -1210,10 +1210,12 @@ export declare class WhalibmobClient extends EventEmitter {
    * Set (reserve) this account's username (w:mex UsernameSetMutation).
    * `ok` is true on SUCCESS, false on rejection, null when unreadable.
    */
-  setUsername(username: string, opts?: { sessionId?: string; pin?: string }): Promise<{
+  setUsername(username: string, opts?: { sessionId?: string; pin?: string; skipCheck?: boolean }): Promise<{
     ok: boolean | null; status: string | null; markers: string[];
     data: any; sessionId: string;
   }>;
+  /** Read the username the server has on file for a jid (own jid by default), via usync. */
+  fetchUsername(jid: string): Promise<string | null>;
 
   // ─── Stores on disk ──────────────────────────────────────────────────────
   getHistoryStore(): any;
