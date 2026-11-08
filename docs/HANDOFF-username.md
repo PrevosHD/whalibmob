@@ -59,22 +59,42 @@ offiziellen iOS-Client (App 26.41.74) per Frida auf dem iPhone X:
 - `checkUsername` gibt `{ available, status, markers, data, sessionId }`,
   `setUsername` gibt `{ ok, status, markers, data, sessionId }`.
 
-**Bestätigt funktionsfähig (2026-11-09):** Ein Username wird nur per **Check→Set mit derselben
-`session_id`** gesetzt. `setUsername` macht jetzt zuerst `checkUsername` und übernimmt dessen
-`session_id`. Ein Set „aus dem Nichts" (frische, ungeprüfte `session_id`) antwortet
-`Internal Server Error` / CRITICAL. `Bocchi63420` wurde so erfolgreich gesetzt → Handle `@bocchi63420`.
-Enum-Labels:
-- Check (in `Query` gewrappt): `SUCCESS`=frei, `INVALID`=ungültiger Name, `ALREADY_TAKEN`=vergeben.
-- Set: `SUCCESS`=gesetzt; Fehler `State Already Exists` (Name schon reserviert),
-  `Bad Request` (unerlaubtes Zeichen), `Internal Server Error` (ungeprüfte Session).
+**ENDERGEBNIS (2026-11-09): `setUsername` persistiert NICHT über whalibmob — server-seitiges Client-Trust-Gating, kein Code-/Protokoll-Problem.**
 
-**Noch offen:**
-1. An Nando_20 testen (erst mit `/username check <name>` einen freien Namen finden).
-2. Optional sauber: `decodeArgo` (`lib/argo`) so erweitern, dass es diese self-describing
-   Replies vollständig als Objekt dekodiert, statt der inline-String-Heuristik.
+Der Set ist korrekt implementiert und byte-identisch zum offiziellen Client (voller Frida-Mitschnitt
+eines App-Saves = genau Check + eine `UsernameSetMutation`, sonst nichts — kein Attestation-IQ,
+kein Nicht-w:mex-Begleitschritt). Trotzdem:
+- Offizielle App (+49-Gerät): Set persistiert (`NandoBocchi_580` → serverweit `ALREADY_TAKEN`).
+- whalibmob (getestet +49 Nando_437, +63 Nando_20 und frisch +63 Nando_05): Set antwortet `SUCCESS`,
+  aber Re-Check zeigt den Namen weiter als `available` — der Write wird still verworfen.
+- A/B am selben Server: Device-Name `ALREADY_TAKEN`, whalibmob-Name `available`.
+
+Ausgeschlossen: Wire-Format, body-`queryId`, `reserved`-Flag, `session_id`-Reuse (Check→Set),
+angekündigte Version (aktuell `2.26.43.75` iOS), async Notification nach Set, fehlende GraphQL-Op
+(Binary hat nur `UsernameSetMutation`/`UsernameCheckQueryV2`/`UsernameGetQuery`/PIN — keine separate
+Activation/Reserve-Mutation; `UsernameActivationObserving` ist nur ein Client-Observer), Region
+(+49 via whalibmob scheitert ebenso), Account-Alter/Rate-Limit (etablierter Nando_20 scheitert auch).
+Übrig bleibt nur der **Verbindungs-/Account-Trust**: der offizielle Client ist hardware-attestiert
+(App Attest / attestierter Registrierungs-Ursprung), whalibmob nicht — der Server akzeptiert die
+Mutation syntaktisch (`SUCCESS`), provisioniert sie aber nur für vertrauenswürdige Clients.
+**Nicht durch Stanza-Replikation lösbar.**
+
+**Was funktioniert & bleibt nutzbar:**
+- `checkUsername(name)` — liefert korrekt globale Verfügbarkeit. Enum (in `Query` gewrappt):
+  `SUCCESS`=frei, `INVALID`=ungültiger Name, `ALREADY_TAKEN`=vergeben. CLI `/username check <name>`.
+- `lookupUsername(name)` — usync Username→JID (Server echot Input als `type="out"`). CLI `/username whois`.
+- Argo-Reader (`argoInlineStrings`/`interpretUsernameReply` in `lib/Client.js`) liest die
+  self-describing Replies (SUCCESS/ALREADY_TAKEN/Bad Request/State Already Exists/Internal Server Error).
+- `/mexraw <qid> <json>` (Diagnose), `_mexQuery(…, {wantArgoRaw, body})`.
+
+**Tote Enden / optionale Aufräumung:**
+- `setUsername` sendet korrekt, hat aber ohne offizielle-App-Attestierung keinen Effekt — als solches
+  dokumentiert lassen oder entfernen.
+- `fetchUsername` (phone→username) ist faktisch tot: usync hält diese Richtung aus Privacy-Gründen
+  zurück (liefert immer `null`).
 
 Frida-Details, Device-Zugang und Capture-Skripte: siehe Memory `username-mex-capture.md`
-(Skripte im Scratchpad: `capture9.py` = leichter w:mex-Hook, der die Mutation fing).
+(Scratchpad: `capture9/10/11.py` = w:mex- bzw. Voll-Stanza-Hooks).
 
 ### Geräte
 - Android (Root + frida-server) → geht.
