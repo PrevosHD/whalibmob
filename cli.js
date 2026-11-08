@@ -1713,12 +1713,23 @@ async function handleLine(line) {
         if (checkOnly) {
           out('checking...');
           _client.checkUsername(name)
-            .then(r  => out('check ' + JSON.stringify(r.data) + '  (' + (Date.now() - _t0) + 'ms)'))
+            .then(r  => out('available: ' + (r.data === true ? 'yes' : 'no') +
+              '  (raw ' + JSON.stringify(r.data) + ', ' + (Date.now() - _t0) + 'ms)'))
             .catch(e => fail('username check error: ' + e.message));
         } else {
           out('setting...');
           _client.setUsername(name)
-            .then(r  => out('username set to "' + name + '"  ' + JSON.stringify(r.data) + '  (' + (Date.now() - _t0) + 'ms)'))
+            .then(r  => {
+              // The server confirms with a GraphQL object; a bare false/null is a
+              // rejection the argo decoder could not turn into a readable error.
+              if (r.data && typeof r.data === 'object') {
+                out('username set to "' + name + '"  ' + JSON.stringify(r.data) +
+                  '  (' + (Date.now() - _t0) + 'ms)');
+              } else {
+                fail('username not set — server rejected it (argo reply: ' +
+                  JSON.stringify(r.data) + ', ' + (Date.now() - _t0) + 'ms)');
+              }
+            })
             .catch(e => fail('username set error: ' + e.message));
         }
         break;
