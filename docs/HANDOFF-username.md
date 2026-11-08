@@ -59,12 +59,18 @@ offiziellen iOS-Client (App 26.41.74) per Frida auf dem iPhone X:
 - `checkUsername` gibt `{ available, status, markers, data, sessionId }`,
   `setUsername` gibt `{ ok, status, markers, data, sessionId }`.
 
+**Bestätigt funktionsfähig (2026-11-09):** Ein Username wird nur per **Check→Set mit derselben
+`session_id`** gesetzt. `setUsername` macht jetzt zuerst `checkUsername` und übernimmt dessen
+`session_id`. Ein Set „aus dem Nichts" (frische, ungeprüfte `session_id`) antwortet
+`Internal Server Error` / CRITICAL. `Bocchi63420` wurde so erfolgreich gesetzt → Handle `@bocchi63420`.
+Enum-Labels:
+- Check (in `Query` gewrappt): `SUCCESS`=frei, `INVALID`=ungültiger Name, `ALREADY_TAKEN`=vergeben.
+- Set: `SUCCESS`=gesetzt; Fehler `State Already Exists` (Name schon reserviert),
+  `Bad Request` (unerlaubtes Zeichen), `Internal Server Error` (ungeprüfte Session).
+
 **Noch offen:**
-1. Positives Check-Sample fehlt: alle getesteten Namen waren vergeben. Wenn ein freier Name
-   geprüft wird, das Enum-Label notieren (vermutlich `AVAILABLE`/`SUCCESS`) und bei Bedarf in
-   `interpretUsernameReply()` ergänzen — aktuell wird `AVAILABLE`/`SUCCESS` schon als frei gewertet.
-2. An Nando_20 testen (Testnummer steht bereits auf „Bocchi63_429").
-3. Optional sauber: `decodeArgo` (`lib/argo`) so erweitern, dass es diese self-describing
+1. An Nando_20 testen (erst mit `/username check <name>` einen freien Namen finden).
+2. Optional sauber: `decodeArgo` (`lib/argo`) so erweitern, dass es diese self-describing
    Replies vollständig als Objekt dekodiert, statt der inline-String-Heuristik.
 
 Frida-Details, Device-Zugang und Capture-Skripte: siehe Memory `username-mex-capture.md`
