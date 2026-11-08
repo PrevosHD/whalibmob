@@ -1,0 +1,11 @@
+# Python-Tools für die Frida-Arbeit (Username-Mitschnitt, frida/android, frida/ios).
+# Für whalibmob selbst wird KEIN Python gebraucht – nur Node (siehe SETUP-MAC.md / .nvmrc).
+#
+# Installation (macOS):
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Wichtig: Die frida-Version hier muss zur frida-server-Version auf dem
+# Gerät (gerootetes Android / gejailbreaktes iPhone) passen.
+frida-tools>=13.0.0
+frida>=16.0.0

@@ -8,3 +8,10 @@ package-lock.json
 
 # npm pack output — a build artifact of checking a release, never a source file
 *.tgz
+
+# Python venv (requirements.txt)
+.venv/
+# Frida build output
+server_with_dependencies.js
+# lokale Primary-Stores
+whalibomb/

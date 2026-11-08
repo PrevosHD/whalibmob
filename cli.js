@@ -486,6 +486,83 @@ function normalizePhone(s) {
   return String(s || '').replace(/^\+/, '').replace(/\D/g, '');
 }
 
+// Named shortcuts and a default number live in ~/.whalibmob.json so /connect
+// does not need the full digits every time.
+function phoneAliases() {
+  const a = readConfig().aliases;
+  return (a && typeof a === 'object' && !Array.isArray(a)) ? a : {};
+}
+
+function rememberPhone(phone) {
+  const ph = normalizePhone(phone);
+  if (!ph) return;
+  writeConfig({ lastPhone: ph });
+}
+
+/** Print alias → number, plus any registered session that has no alias yet. */
+function printSessionsList() {
+  const aliases = phoneAliases();
+  const byPhone = {};
+  for (const [name, phone] of Object.entries(aliases)) {
+    const ph = normalizePhone(phone);
+    if (!ph) continue;
+    if (!byPhone[ph]) byPhone[ph] = [];
+    byPhone[ph].push(name);
+  }
+
+  const rows = [];
+  for (const [name, phone] of Object.entries(aliases)) {
+    const ph = normalizePhone(phone);
+    if (!ph) continue;
+    const ok = hasMobileSession(ph) || hasWebSession(ph);
+    rows.push({ alias: name, phone: ph, ok });
+  }
+  rows.sort((a, b) => a.alias.localeCompare(b.alias));
+
+  for (const s of listSessions(_sessDir)) {
+    if (byPhone[s.phone]) continue;
+    const ok = hasMobileSession(s.phone) || hasWebSession(s.phone);
+    if (!ok) continue; // unfinished registrations stay out of the list
+    rows.push({ alias: '—', phone: s.phone, ok: true });
+  }
+
+  if (!rows.length) {
+    out('no sessions / aliases');
+    out('  /alias <name> <phone>   then  /sessions');
+    return;
+  }
+
+  const aliasW = Math.max(5, ...rows.map(r => r.alias.length));
+  for (const r of rows) {
+    const mark = r.ok ? '' : '  (no session on disk)';
+    out('  ' + r.alias.padEnd(aliasW) + '  →  +' + r.phone + mark);
+  }
+
+  const cfg = readConfig();
+  const def = normalizePhone(cfg.defaultPhone || '');
+  const last = normalizePhone(cfg.lastPhone || '');
+  if (def)  out('  default  +' + def);
+  if (last) out('  last     +' + last);
+}
+
+function resolvePhone(raw) {
+  const s = String(raw || '').trim();
+  if (!s) {
+    const cfg = readConfig();
+    const ph = normalizePhone(cfg.defaultPhone || cfg.lastPhone || '');
+    if (!ph) throw new Error('no phone — use /connect <phone>, /default <phone>, or /alias <name> <phone>');
+    return ph;
+  }
+  // Alias names are letters / dashes / underscores (not digit-only).
+  if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(s)) {
+    const aliases = phoneAliases();
+    const hit = aliases[s] || aliases[s.toLowerCase()];
+    if (!hit) throw new Error('unknown alias "' + s + '" — /alias to list, /alias ' + s + ' <phone> to set');
+    return normalizePhone(hit);
+  }
+  return normalizePhone(s);
+}
+
 // What to tell the person once a code request has gone through. A flash call
 // needs its own words: nothing arrives in a message, so "enter the code" names
 // something they will never receive. What they get is a call that stops before
@@ -678,7 +755,7 @@ const HELP = `
     /reg confirm <phone> <code>                       complete registration
 
   Connection
-    /connect    <phone> [sms|pair]           connect to WhatsApp (asks which if unset)
+    /connect    [phone|alias] [sms|pair]     connect (no arg = default / last number)
     /pair       <phone> [code]               link to an existing account by 8-digit code
     /qrcode     <phone>                       link to an existing account by scanning a QR
     /link-code  <8chars>                     primary: accept companion pairing code (kebab / WA Web)
@@ -686,7 +763,10 @@ const HELP = `
     /fixnumber                               re-file a session under the number WhatsApp uses
     /disconnect                              disconnect
     /reconnect                              force reconnection
-    /session                                show session info
+    /session                                show session info (connected account)
+    /sessions   /list                        list aliases → numbers (and registered sessions)
+    /default    [phone|alias]                set or show the default number for /connect
+    /alias      [name [phone]]               list / set / clear (/alias rm <name>) shortcuts
 
     /help                                   show this help
     /quit  /exit                            disconnect and exit
@@ -1104,6 +1184,7 @@ async function doConnectWeb(phone, opts) {
   client.once('connected', () => {
     _client = client;
     _phone  = phone;
+    rememberPhone(phone);
     out('connected as +' + phone + '  (web / companion)');
     _rl.setPrompt('wa +' + phone + '> ');
     _rl.prompt();
@@ -1186,6 +1267,7 @@ async function doConnectWebQr(phone) {
   client.once('connected', () => {
     _client = client;
     _phone  = phone;
+    rememberPhone(phone);
     out('connected as +' + phone + '  (web / companion)');
     _rl.setPrompt('wa +' + phone + '> ');
     _rl.prompt();
@@ -1234,6 +1316,7 @@ async function doConnect(phone) {
   client.once('connected', () => {
     _client = client;
     _phone  = phone;
+    rememberPhone(phone);
     out('connected as +' + phone);
     _rl.setPrompt('wa +' + phone + '> ');
     _rl.prompt();
@@ -1387,10 +1470,10 @@ async function handleLine(line) {
       }
 
       case '/connect': {
-        const ph = p[1];
-        if (!ph) { fail('usage: /connect <phone> [sms|pair]'); break; }
         if (_client && _client.connected) { fail('already connected'); break; }
-        const phn = normalizePhone(ph);
+        let phn;
+        try { phn = resolvePhone(p[1]); }
+        catch (e) { fail(e.message); break; }
         const forced = (p[2] || '').toLowerCase();
         const method = forced === 'pair' || forced === 'pairing' ? 'pairing'
                      : forced === 'sms'                          ? 'sms'
@@ -1403,10 +1486,81 @@ async function handleLine(line) {
           out('  or link it to an account:       /pair ' + phn);
           break;
         }
+        if (!p[1]) out('using +' + phn + ' (default/last)');
+        else if (/^[A-Za-z]/.test(p[1])) out('alias "' + p[1] + '" → +' + phn);
         out('connecting as ' + (method === 'pairing' ? 'companion (pairing code)'
                                                      : 'primary device (sms)') + '...');
         if (method === 'pairing') await doConnectWeb(phn);
         else                      await doConnect(phn);
+        break;
+      }
+
+      case '/default': {
+        const arg = p[1];
+        if (!arg) {
+          const cfg = readConfig();
+          const d = normalizePhone(cfg.defaultPhone || '');
+          const l = normalizePhone(cfg.lastPhone || '');
+          if (d) out('default  +' + d);
+          else   out('default  (not set)');
+          if (l) out('last     +' + l);
+          out('  /default <phone|alias>   set   ·  /default clear   unset');
+          break;
+        }
+        if (arg === 'clear' || arg === 'rm' || arg === 'none') {
+          writeConfig({ defaultPhone: '' });
+          out('default cleared — /connect falls back to last connected number');
+          break;
+        }
+        let phn;
+        try { phn = resolvePhone(arg); }
+        catch (e) { fail(e.message); break; }
+        writeConfig({ defaultPhone: phn });
+        out('default → +' + phn + '  (/connect with no args uses this)');
+        break;
+      }
+
+      case '/sessions':
+      case '/list': {
+        printSessionsList();
+        break;
+      }
+
+      case '/alias': {
+        const name = p[1];
+        const val  = p[2];
+        const aliases = phoneAliases();
+        if (!name) {
+          printSessionsList();
+          break;
+        }
+        if (name === 'rm' || name === 'del' || name === 'remove') {
+          const target = val;
+          if (!target) { fail('usage: /alias rm <name>'); break; }
+          if (!aliases[target] && !aliases[target.toLowerCase()]) {
+            fail('no alias "' + target + '"'); break;
+          }
+          const key = aliases[target] ? target : target.toLowerCase();
+          delete aliases[key];
+          writeConfig({ aliases });
+          out('removed alias "' + key + '"');
+          break;
+        }
+        if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) {
+          fail('alias name must start with a letter (a-z, 0-9, _ -)');
+          break;
+        }
+        if (!val) {
+          const hit = aliases[name] || aliases[name.toLowerCase()];
+          if (!hit) fail('no alias "' + name + '"');
+          else out(name + '  →  +' + normalizePhone(hit));
+          break;
+        }
+        const phn = normalizePhone(val);
+        if (!phn) { fail('usage: /alias <name> <phone>'); break; }
+        aliases[name] = phn;
+        writeConfig({ aliases });
+        out('alias "' + name + '" → +' + phn);
         break;
       }
 
